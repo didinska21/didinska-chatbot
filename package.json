@@ -1,0 +1,14 @@
+{
+  "name": "didinska-chatbot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private Telegram coding assistant on Cloudflare Workers using AgentRouter.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.33.0"
+  }
+}

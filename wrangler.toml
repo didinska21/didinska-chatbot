@@ -1,0 +1,15 @@
+name = "didinska-chatbot"
+main = "src/worker.js"
+compatibility_date = "2026-08-30"
+
+# Create a D1 database in Cloudflare and replace DATABASE_ID below.
+[[d1_databases]]
+binding = "DB"
+database_name = "didinska-chatbot-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+DEFAULT_MODEL = "claude-opus-5"
+MAX_HISTORY = "20"
+MAX_FILE_BYTES = "200000"
