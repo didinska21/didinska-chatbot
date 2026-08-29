@@ -6,7 +6,7 @@ compatibility_date = "2026-08-30"
 [[d1_databases]]
 binding = "DB"
 database_name = "didinska-chatbot-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "e569a3bf-6b74-45db-b0c2-5c1156d16a78"
 migrations_dir = "migrations"
 
 [vars]
