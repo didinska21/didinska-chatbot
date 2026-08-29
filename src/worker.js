@@ -1,5 +1,5 @@
-const CLAUDE_BASE = "https://co.agentrouter.org";
-const OPENAI_BASE = "https://co.agentrouter.org/v1";
+const CLAUDE_BASE = "https://agentrouter.org";
+const OPENAI_BASE = "https://agentrouter.org/v1";
 
 function isClaude(model) {
   return /^claude(?:-|$)/i.test(model);
