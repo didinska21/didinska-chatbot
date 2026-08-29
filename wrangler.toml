@@ -1,6 +1,6 @@
 name = "didinska-chatbot"
 main = "src/worker.js"
-compatibility_date = "2026-08-30"
+compatibility_date = "2026-01-01"
 
 # Create a D1 database in Cloudflare and replace DATABASE_ID below.
 [[d1_databases]]
