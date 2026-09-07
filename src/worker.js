@@ -85,7 +85,7 @@ async function callClaude(env, model, messages, project, baseUrl) {
   const r = await fetchWithTimeout(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
-      "x-api-key": env.AGENTROUTER_API_KEY,
+      "x-api-key": env.GLOBAL_API_KEY,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json"
     },
@@ -103,7 +103,7 @@ async function callOpenAI(env, model, messages, project, baseUrl) {
   const r = await fetchWithTimeout(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${env.AGENTROUTER_API_KEY}`,
+      "Authorization": `Bearer ${env.GLOBAL_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ model, max_tokens: 12000, messages: [{ role: "system", content: systemPrompt(project) }, ...messages] })
