@@ -75,12 +75,14 @@ In Worker → Settings → Variables and Secrets, add:
 
 ```text
 TELEGRAM_BOT_TOKEN
-AGENTROUTER_API_KEY
+GLOBAL_API_KEY
 TELEGRAM_ALLOWED_USER_ID
 TELEGRAM_WEBHOOK_SECRET
 ```
 
 Use **Secret** for all four.
+
+`GLOBAL_API_KEY` is provider-agnostic — one secret name used for whichever provider is currently set as the base URL (AgentRouter, OpenRouter, Groq, GitHub Models, etc). To switch providers, just update the value of this secret and run `/seturl <new_base_url>` in Telegram. No code change, no redeploy, no renaming.
 
 `TELEGRAM_ALLOWED_USER_ID` is your numeric Telegram user ID.
 
@@ -139,7 +141,7 @@ Create `.dev.vars` (never commit it):
 
 ```text
 TELEGRAM_BOT_TOKEN=...
-AGENTROUTER_API_KEY=...
+GLOBAL_API_KEY=...
 TELEGRAM_ALLOWED_USER_ID=...
 TELEGRAM_WEBHOOK_SECRET=...
 ```
