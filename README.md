@@ -1,12 +1,13 @@
 # didinska-chatbot
 
-Private Telegram coding assistant powered by AgentRouter and deployed on Cloudflare Workers.
+Private Telegram coding assistant powered by global apikey and deployed on Cloudflare Workers.
 
 ## What it does
 
 - Telegram chatbot for coding
 - Claude and other AgentRouter-compatible models by manual model ID
 - Custom base URL, changeable at runtime from Telegram (no redeploy needed)
+- Code in responses is sent as a clean monospace block (short code) or as a downloadable file (long/multi-part code) — never split mid-block
 - Conversation context stored in Cloudflare D1
 - Private Telegram user whitelist
 - `/model <model-id>`
