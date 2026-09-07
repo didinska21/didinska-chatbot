@@ -5,11 +5,14 @@ Private Telegram coding assistant powered by AgentRouter and deployed on Cloudfl
 ## What it does
 
 - Telegram chatbot for coding
-- Claude and other AgentRouter models by manual model ID
+- Claude and other AgentRouter-compatible models by manual model ID
+- Custom base URL, changeable at runtime from Telegram (no redeploy needed)
 - Conversation context stored in Cloudflare D1
 - Private Telegram user whitelist
 - `/model <model-id>`
 - `/models`
+- `/seturl <url>` — set base URL globally (applies to all models/projects)
+- `/geturl` — show current base URL
 - `/project <name>`
 - `/clear`
 - `/test`
@@ -19,9 +22,10 @@ Private Telegram coding assistant powered by AgentRouter and deployed on Cloudfl
 
 ## Important architecture
 
-- Claude models use AgentRouter Anthropic Messages API: `https://co.agentrouter.org/v1/messages`
-- Other models use AgentRouter OpenAI-compatible API: `https://co.agentrouter.org/v1/chat/completions`
-- Telegram sends updates to the Worker through a webhook.
+- Base URL defaults to `https://agentrouter.org` and can be changed anytime via `/seturl` (stored in D1, applies globally, no redeploy).
+- Claude models call `<base_url>/v1/messages` (Anthropic Messages API format).
+- Other models call `<base_url>/v1/chat/completions` (OpenAI-compatible format).
+- Telegram sends updates to the Worker through a webhook, protected by `TELEGRAM_WEBHOOK_SECRET`. The secret is now mandatory — the Worker rejects all requests if it isn't set.
 - API keys are Cloudflare Secrets, not committed to GitHub.
 
 ## Deploy from GitHub to Cloudflare Workers
@@ -43,6 +47,8 @@ Run the migration from your machine:
 npm install
 npx wrangler d1 migrations apply didinska-chatbot-db --remote
 ```
+
+This applies both `0001_init.sql` (conversations table) and `0002_settings.sql` (global settings table, used by `/seturl`).
 
 If you use Cloudflare's Git integration, the database must exist before deployment and the `database_id` must be correct.
 

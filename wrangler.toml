@@ -11,5 +11,6 @@ migrations_dir = "migrations"
 
 [vars]
 DEFAULT_MODEL = "claude-opus-5"
+DEFAULT_BASE_URL = "https://agentrouter.org"
 MAX_HISTORY = "20"
 MAX_FILE_BYTES = "200000"
