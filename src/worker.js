@@ -1,8 +1,19 @@
-// const CLAUDE_BASE = "https://agentrouter.org";
-// const OPENAI_BASE = "https://agentrouter.org/v1";
-const CLAUDE_BASE = "https://ps.air-outer.com";
-const OPENAI_BASE = "https://ps.air-outer.com/v1";
+// Fallback kalau belum pernah di-set lewat /seturl.
+const DEFAULT_BASE_URL = "https://agentrouter.org";
 
+async function getBaseUrl(env) {
+  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'base_url'").first();
+  const url = row?.value || env.DEFAULT_BASE_URL || DEFAULT_BASE_URL;
+  return url.replace(/\/+$/, "");
+}
+
+async function setBaseUrl(env, url) {
+  const now = Date.now();
+  await env.DB.prepare(`INSERT INTO settings(key, value, updated_at)
+    VALUES('base_url', ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
+    .bind(url.replace(/\/+$/, ""), now).run();
+}
 
 function isClaude(model) {
   return /^claude(?:-|$)/i.test(model);
@@ -69,9 +80,9 @@ async function saveState(env, userId, state) {
     .bind(String(userId), state.model, state.project, JSON.stringify(state.history), now).run();
 }
 
-async function callClaude(env, model, messages, project) {
+async function callClaude(env, model, messages, project, baseUrl) {
   const start = Date.now();
-  const r = await fetchWithTimeout(`${CLAUDE_BASE}/v1/messages`, {
+  const r = await fetchWithTimeout(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
       "x-api-key": env.AGENTROUTER_API_KEY,
@@ -87,9 +98,9 @@ async function callClaude(env, model, messages, project) {
   return { answer, ms: Date.now() - start, usage: data.usage || null };
 }
 
-async function callOpenAI(env, model, messages, project) {
+async function callOpenAI(env, model, messages, project, baseUrl) {
   const start = Date.now();
-  const r = await fetchWithTimeout(`${OPENAI_BASE}/chat/completions`, {
+  const r = await fetchWithTimeout(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${env.AGENTROUTER_API_KEY}`,
@@ -104,7 +115,10 @@ async function callOpenAI(env, model, messages, project) {
 }
 
 async function ask(env, model, messages, project) {
-  return isClaude(model) ? callClaude(env, model, messages, project) : callOpenAI(env, model, messages, project);
+  const baseUrl = await getBaseUrl(env);
+  return isClaude(model)
+    ? callClaude(env, model, messages, project, baseUrl)
+    : callOpenAI(env, model, messages, project, baseUrl);
 }
 
 function authorized(env, userId) {
@@ -136,7 +150,8 @@ async function handleCommand(env, msg) {
   const state = await getState(env, userId);
 
   if (cmd === "/start" || cmd === "/help") {
-    await sendText(env, chatId, `🤖 DIDINSKA CODING ASSISTANT\n\nModel: ${state.model}\nProject: ${state.project || "none"}\n\nKirim pesan biasa untuk coding.\n\nPerintah:\n/model <model-id>\n/models\n/project <nama>\n/clear\n/test\n/id\n/help\n\nContoh:\n/model claude-opus-5\n/project XAUUSD_EA\n\nBuatkan EA MQL5 dengan EMA 200 dan RSI.`);
+    const baseUrl = await getBaseUrl(env);
+    await sendText(env, chatId, `🤖 DIDINSKA CODING ASSISTANT\n\nModel: ${state.model}\nProject: ${state.project || "none"}\nBase URL: ${baseUrl}\n\nKirim pesan biasa untuk coding.\n\nPerintah:\n/model <model-id>\n/models\n/seturl <url>\n/geturl\n/project <nama>\n/clear\n/test\n/id\n/help\n\nContoh:\n/model claude-opus-5\n/seturl https://agentrouter.org\n/project XAUUSD_EA\n\nBuatkan EA MQL5 dengan EMA 200 dan RSI.`);
     return;
   }
   if (cmd === "/model") {
@@ -144,6 +159,23 @@ async function handleCommand(env, msg) {
     state.model = arg;
     await saveState(env, userId, state);
     await sendText(env, chatId, `✅ Model diubah ke: ${arg}\nProtokol: ${isClaude(arg) ? "Anthropic Messages" : "OpenAI-compatible Chat Completions"}`);
+    return;
+  }
+  if (cmd === "/geturl") {
+    const url = await getBaseUrl(env);
+    await sendText(env, chatId, `🌐 Base URL sekarang: ${url}\nGunakan /seturl <url> untuk mengubah.`);
+    return;
+  }
+  if (cmd === "/seturl") {
+    if (!arg) {
+      const url = await getBaseUrl(env);
+      return sendText(env, chatId, `Base URL sekarang: ${url}\nGunakan /seturl <url>\nContoh: /seturl https://agentrouter.org`);
+    }
+    if (!/^https:\/\/[^\s]+$/i.test(arg)) {
+      return sendText(env, chatId, "⚠️ URL harus diawali https:// dan tanpa spasi.");
+    }
+    await setBaseUrl(env, arg);
+    await sendText(env, chatId, `✅ Base URL diubah ke: ${arg.replace(/\/+$/, "")}\n\nBerlaku global untuk semua model & semua project. Endpoint yang dipanggil:\n• Claude: <url>/v1/messages\n• Lainnya: <url>/v1/chat/completions`);
     return;
   }
   if (cmd === "/models") {
@@ -223,11 +255,17 @@ export default {
       }
       if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
+      // TELEGRAM_WEBHOOK_SECRET WAJIB di-set. Kalau kosong, tolak semua
+      // request daripada fail-open (sebelumnya validasi dilewati total
+      // kalau env var belum ada, jadi siapa pun yang tau URL worker bisa
+      // kirim update Telegram palsu).
       const expectedSecret = String(env.TELEGRAM_WEBHOOK_SECRET || "").trim();
-      if (expectedSecret) {
-        const got = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
-        if (got !== expectedSecret) return new Response("Unauthorized", { status: 401 });
+      if (!expectedSecret) {
+        console.error("TELEGRAM_WEBHOOK_SECRET belum di-set di Cloudflare Secrets.");
+        return new Response("Server misconfigured", { status: 500 });
       }
+      const got = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
+      if (got !== expectedSecret) return new Response("Unauthorized", { status: 401 });
 
       const update = await request.json();
       const msg = update.message;
