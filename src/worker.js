@@ -44,6 +44,101 @@ async function tg(env, method, body) {
   return data.result;
 }
 
+async function tgSendDocument(env, chatId, filename, content, caption) {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  if (caption) form.append("caption", caption.slice(0, 1024));
+  form.append("document", new Blob([content], { type: "text/plain; charset=utf-8" }), filename);
+  const r = await fetchWithTimeout(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+    method: "POST",
+    body: form
+  }, 30000);
+  const data = await r.json();
+  if (!data.ok) throw new Error(`Telegram sendDocument: ${data.description || "unknown error"}`);
+  return data.result;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Ubah teks bertanda ```lang ... ``` jadi <pre><code class="language-lang">
+// yang dirender Telegram sebagai blok monospace dengan tombol copy.
+function mdToTelegramHtml(text) {
+  const re = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    out += escapeHtml(text.slice(last, m.index));
+    const lang = (m[1] || "").toLowerCase();
+    const cls = lang ? ` class="language-${lang}"` : "";
+    out += `<pre><code${cls}>${escapeHtml(m[2])}</code></pre>`;
+    last = re.lastIndex;
+  }
+  out += escapeHtml(text.slice(last));
+  return out;
+}
+
+// Pisahkan narasi dan blok kode dari jawaban AI, supaya blok kode bisa
+// dikirim terpisah sebagai file kalau kepanjangan buat 1 pesan Telegram.
+function extractCodeBlocks(text) {
+  const re = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+  const blocks = [];
+  let last = 0;
+  let prose = "";
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    prose += text.slice(last, m.index);
+    blocks.push({ lang: (m[1] || "").toLowerCase(), code: m[2] });
+    prose += `\n📎 [kode #${blocks.length} — lihat file terlampir]\n`;
+    last = re.lastIndex;
+  }
+  prose += text.slice(last);
+  return { prose: prose.trim(), blocks };
+}
+
+const EXT_MAP = {
+  mq5: "mq5", mql5: "mq5", mqh: "mqh", python: "py", py: "py",
+  javascript: "js", js: "js", typescript: "ts", ts: "ts", jsx: "jsx", tsx: "tsx",
+  json: "json", sql: "sql", html: "html", css: "css", php: "php",
+  java: "java", c: "c", cpp: "cpp", "c++": "cpp", "c#": "cs", csharp: "cs",
+  go: "go", golang: "go", rust: "rs", bash: "sh", sh: "sh", shell: "sh",
+  yaml: "yaml", yml: "yaml", xml: "xml", toml: "toml", txt: "txt"
+};
+
+function extFor(lang) {
+  return EXT_MAP[lang] || "txt";
+}
+
+// Kirim jawaban AI. Kode pendek/1 blok -> 1 pesan HTML monospace rapi.
+// Kode panjang/banyak blok -> narasi dikirim biasa, tiap blok kode
+// dikirim sebagai file terpisah (nggak kepotong, siap copy/download).
+async function sendAnswer(env, chatId, answer, project) {
+  if (!answer) { await sendText(env, chatId, "(AI returned an empty response)"); return; }
+
+  const { prose, blocks } = extractCodeBlocks(answer);
+
+  if (blocks.length === 0) {
+    await sendText(env, chatId, answer);
+    return;
+  }
+
+  if (blocks.length === 1 && answer.length <= 3500) {
+    await tg(env, "sendMessage", { chat_id: chatId, text: mdToTelegramHtml(answer), parse_mode: "HTML" });
+    return;
+  }
+
+  if (prose) await sendText(env, chatId, prose);
+  const base = String(project || "code").replace(/[^a-zA-Z0-9_-]/g, "_") || "code";
+  let i = 1;
+  for (const b of blocks) {
+    const filename = blocks.length > 1 ? `${base}_part${i}.${extFor(b.lang)}` : `${base}.${extFor(b.lang)}`;
+    await tgSendDocument(env, chatId, filename, b.code, `📄 ${filename}`);
+    i++;
+  }
+}
+
 async function sendText(env, chatId, text) {
   const chunks = splitForTelegram(text, 3900);
   for (const chunk of chunks) await tg(env, "sendMessage", { chat_id: chatId, text: chunk });
@@ -239,7 +334,7 @@ async function handleText(env, msg) {
     state.history.push({ role: "assistant", content: result.answer });
     state.history = state.history.slice(-maxHistory);
     await saveState(env, userId, state);
-    await sendText(env, chatId, result.answer || "(AI returned an empty response)");
+    await sendAnswer(env, chatId, result.answer, state.project);
   } catch (e) {
     state.history.pop();
     await saveState(env, userId, state);
