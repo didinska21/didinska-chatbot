@@ -274,7 +274,7 @@ async function handleCommand(env, msg) {
     return;
   }
   if (cmd === "/models") {
-    await sendText(env, chatId, `Model ID mengikuti akses AgentRouter API key kamu.\n\nContoh:\n• claude-opus-5\n• claude-opus-4-8\n• deepseek-v4-flash\n• glm-5.3\n• gpt-5.6-sol\n\nGunakan /model <model-id>.`);
+    await sendText(env, chatId, `Model yang tersedia di akun AgentRouter kamu:\n\n• claude-opus-5 (Anthropic)\n• claude-opus-4-8 (Anthropic)\n• gpt-6-astra (OpenAI)\n• gpt-5.6-sol (OpenAI)\n• deepseek-v4-flash (DeepSeek)\n\nGunakan /model <model-id>, contoh:\n/model claude-opus-5`);
     return;
   }
   if (cmd === "/project") {
